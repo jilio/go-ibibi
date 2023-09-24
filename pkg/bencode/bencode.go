@@ -3,6 +3,7 @@ package bencode
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"strconv"
 )
 
@@ -119,7 +120,8 @@ func Decode(r *bufio.Reader) (interface{}, error) {
 		}
 
 		str := make([]byte, strLen)
-		_, err = r.Read(str)
+
+		_, err = io.ReadFull(r, str)
 		if err != nil {
 			return nil, err
 		}
