@@ -2,6 +2,8 @@ package bencode
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -127,5 +129,49 @@ func Decode(r *bufio.Reader) (interface{}, error) {
 		}
 
 		return string(str), nil
+	}
+}
+
+func Marshal(w io.Writer, val interface{}) error {
+	var buf bytes.Buffer
+	err := encodeValue(&buf, val)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(buf.Bytes())
+	return err
+}
+
+func encodeValue(buf *bytes.Buffer, val interface{}) error {
+	switch v := val.(type) {
+	case int, int8, int16, int32, int64, float32, float64:
+		_, err := fmt.Fprintf(buf, "i%de", v)
+		return err
+	case string:
+		_, err := fmt.Fprintf(buf, "%d:%s", len(v), v)
+		return err
+	case []interface{}:
+		buf.WriteString("l")
+		for _, item := range v {
+			if err := encodeValue(buf, item); err != nil {
+				return err
+			}
+		}
+		buf.WriteString("e")
+		return nil
+	case map[string]interface{}:
+		buf.WriteString("d")
+		for k, value := range v {
+			if err := encodeValue(buf, k); err != nil {
+				return err
+			}
+			if err := encodeValue(buf, value); err != nil {
+				return err
+			}
+		}
+		buf.WriteString("e")
+		return nil
+	default:
+		return errors.New("unsupported type for encoding")
 	}
 }
