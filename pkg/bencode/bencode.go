@@ -147,9 +147,11 @@ func encodeValue(buf *bytes.Buffer, val interface{}) error {
 	case int, int8, int16, int32, int64, float32, float64:
 		_, err := fmt.Fprintf(buf, "i%de", v)
 		return err
+
 	case string:
 		_, err := fmt.Fprintf(buf, "%d:%s", len(v), v)
 		return err
+
 	case []interface{}:
 		buf.WriteString("l")
 		for _, item := range v {
@@ -159,6 +161,7 @@ func encodeValue(buf *bytes.Buffer, val interface{}) error {
 		}
 		buf.WriteString("e")
 		return nil
+
 	case map[string]interface{}:
 		buf.WriteString("d")
 		for k, value := range v {
@@ -171,6 +174,7 @@ func encodeValue(buf *bytes.Buffer, val interface{}) error {
 		}
 		buf.WriteString("e")
 		return nil
+
 	default:
 		return errors.New("unsupported type for encoding")
 	}
