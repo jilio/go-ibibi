@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/jilio/go-ibibi/internal/torrent"
@@ -23,8 +24,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// склеиваем блоки из канала blockCh
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		resultFile, err := os.Create("result.fb2")
 		if err != nil {
 			fmt.Println("failed to create result file", err)
@@ -49,10 +53,6 @@ func main() {
 		fmt.Println("no peers")
 		os.Exit(1)
 	}
-
-	// for _, peer := range peers {
-	// 	fmt.Println("peer:", peer)
-	// }
 
 	peer := peers[2]
 	err = peer.Handshake(trnt.InfoHash)
@@ -80,14 +80,18 @@ func main() {
 	pieces := len(trnt.Info["pieces"].(string)) / 20
 	pieceLength := trnt.Info["piece length"].(int)
 	size := trnt.Info["length"].(int)
-	blockNum := pieceLength / 16384
+	maxBlockLength := 16384
+	blockNum := pieceLength / maxBlockLength
 
 	for i := 0; i < pieces; i += 1 {
-		for j := 0; j < int(blockNum); j += 1 {
-			blockSize := 16384
-			offset := j * blockSize
-			end := min((j+1)*blockSize, size-i*pieceLength)
-			blockLength := end - offset
+		for j := 0; j < blockNum; j += 1 {
+			offset := j * maxBlockLength
+			left := size - (i*pieceLength + j*maxBlockLength)
+			blockLength := min(maxBlockLength, left)
+
+			if left <= 0 {
+				break
+			}
 
 			msg := bytes.Buffer{}
 			binary.Write(&msg, binary.BigEndian, uint32(i))           // piece index
@@ -97,13 +101,9 @@ func main() {
 			peer.SendMessage(torrent.Request, msg.Bytes())
 			fmt.Printf("progress: %.2f\n", float32(i*pieceLength+offset+blockLength)/float32(size))
 
-			time.Sleep(200 * time.Millisecond)
-
-			if size == i*pieceLength+offset+blockLength {
-				fmt.Println("all blocks received")
-				time.Sleep(5 * time.Second) // todo: handle running goroutines
-				os.Exit(0)
-			}
+			time.Sleep(100 * time.Millisecond) // todo: ограничить кол-во запросов в секунду
 		}
 	}
+
+	wg.Wait()
 }
