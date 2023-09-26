@@ -236,3 +236,12 @@ func (p *Peer) doSendMessage(peerMessageType peerMessageType, payload []byte) er
 
 	return nil
 }
+
+func (p *Peer) RequestPiece(pieceIndex, begin, length uint32) {
+	msg := bytes.Buffer{}
+	binary.Write(&msg, binary.BigEndian, pieceIndex)
+	binary.Write(&msg, binary.BigEndian, begin)
+	binary.Write(&msg, binary.BigEndian, length)
+
+	p.SendMessage(Request, msg.Bytes())
+}

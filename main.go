@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
@@ -12,7 +10,8 @@ import (
 )
 
 func main() {
-	file, err := os.Open("sample.torrent")
+	filename := os.Args[1]
+	file, err := os.Open(filename)
 	if err != nil {
 		fmt.Println("failed to open file", err)
 		os.Exit(1)
@@ -47,14 +46,14 @@ func main() {
 		fmt.Println("failed to get peers", err)
 		os.Exit(1)
 	}
-	fmt.Println("peers:", peers)
+	fmt.Println("peers:", len(peers))
 
 	if len(peers) == 0 {
 		fmt.Println("no peers")
 		os.Exit(1)
 	}
 
-	peer := peers[2]
+	peer := peers[3]
 	err = peer.Handshake(trnt.InfoHash)
 	if err != nil {
 		fmt.Println("failed to handshake", err)
@@ -79,27 +78,22 @@ func main() {
 
 	pieces := len(trnt.Info["pieces"].(string)) / 20
 	pieceLength := trnt.Info["piece length"].(int)
-	size := trnt.Info["length"].(int)
+	filesize := trnt.Info["length"].(int)
 	maxBlockLength := 16384
-	blockNum := pieceLength / maxBlockLength
+	blocks := pieceLength / maxBlockLength
 
-	for i := 0; i < pieces; i += 1 {
-		for j := 0; j < blockNum; j += 1 {
-			offset := j * maxBlockLength
-			left := size - (i*pieceLength + j*maxBlockLength)
+	for piece := 0; piece < pieces; piece += 1 {
+		for block := 0; block < blocks; block += 1 {
+			blockOffset := block * maxBlockLength
+			left := filesize - (piece*pieceLength + block*maxBlockLength)
 			blockLength := min(maxBlockLength, left)
 
-			if left <= 0 {
+			if blockLength <= 0 {
 				break
 			}
 
-			msg := bytes.Buffer{}
-			binary.Write(&msg, binary.BigEndian, uint32(i))           // piece index
-			binary.Write(&msg, binary.BigEndian, uint32(offset))      // begin
-			binary.Write(&msg, binary.BigEndian, uint32(blockLength)) // length, <2^14
-
-			peer.SendMessage(torrent.Request, msg.Bytes())
-			fmt.Printf("progress: %.2f\n", float32(i*pieceLength+offset+blockLength)/float32(size))
+			peer.RequestPiece(uint32(piece), uint32(blockOffset), uint32(blockLength))
+			fmt.Printf("progress: %.2f\n", float32(piece*pieceLength+blockOffset+blockLength)/float32(filesize))
 
 			time.Sleep(100 * time.Millisecond) // todo: ограничить кол-во запросов в секунду
 		}
