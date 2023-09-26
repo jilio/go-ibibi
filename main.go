@@ -54,7 +54,7 @@ func main() {
 	// 	fmt.Println("peer:", peer)
 	// }
 
-	peer := peers[3]
+	peer := peers[2]
 	err = peer.Handshake(trnt.InfoHash)
 	if err != nil {
 		fmt.Println("failed to handshake", err)
@@ -76,27 +76,34 @@ func main() {
 	fmt.Println("interested sent")
 
 	fmt.Println("torrent info", trnt.Info)
+
+	pieces := len(trnt.Info["pieces"].(string)) / 20
 	pieceLength := trnt.Info["piece length"].(int)
 	size := trnt.Info["length"].(int)
 	blockNum := pieceLength / 16384
 
-	// todo: итерировать еще по частям
-	for i := 0; i < int(blockNum); i += 1 {
-		blockSize := 16384
-		offset := i * blockSize
-		end := (i + 1) * blockSize
-		blockLength := min(end, size) - offset
+	for i := 0; i < pieces; i += 1 {
+		for j := 0; j < int(blockNum); j += 1 {
+			blockSize := 16384
+			offset := j * blockSize
+			end := min((j+1)*blockSize, size-i*pieceLength)
+			blockLength := end - offset
 
-		msg := bytes.Buffer{}
-		binary.Write(&msg, binary.BigEndian, uint32(0))           // piece index
-		binary.Write(&msg, binary.BigEndian, uint32(offset))      // begin
-		binary.Write(&msg, binary.BigEndian, uint32(blockLength)) // length, <2^14
+			msg := bytes.Buffer{}
+			binary.Write(&msg, binary.BigEndian, uint32(i))           // piece index
+			binary.Write(&msg, binary.BigEndian, uint32(offset))      // begin
+			binary.Write(&msg, binary.BigEndian, uint32(blockLength)) // length, <2^14
 
-		peer.SendMessage(torrent.Request, msg.Bytes())
-		fmt.Println("request sent", i)
+			peer.SendMessage(torrent.Request, msg.Bytes())
+			fmt.Printf("progress: %.2f\n", float32(i*pieceLength+offset+blockLength)/float32(size))
 
-		time.Sleep(1 * time.Second)
+			time.Sleep(200 * time.Millisecond)
+
+			if size == i*pieceLength+offset+blockLength {
+				fmt.Println("all blocks received")
+				time.Sleep(5 * time.Second) // todo: handle running goroutines
+				os.Exit(0)
+			}
+		}
 	}
-
-	time.Sleep(10 * time.Second)
 }

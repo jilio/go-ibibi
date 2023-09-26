@@ -72,7 +72,6 @@ func (p *Peer) messageSender() {
 }
 
 func (p *Peer) messageListener() {
-
 	for {
 		msgType, payload, err := p.AwaitMessage()
 		if err != nil {
@@ -95,7 +94,7 @@ func (p *Peer) messageListener() {
 				Index:  pieceIndex,
 				Begin:  begin,
 				Length: length,
-				Data:   payload,
+				Data:   blockData,
 			}
 		}
 	}
