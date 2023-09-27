@@ -12,11 +12,21 @@ import (
 	"github.com/jilio/go-ibibi/pkg/bencode"
 )
 
+const (
+	PieceHashLen = 20
+	MaxBlockLen  = 16384
+)
+
 type Torrent struct {
-	Announce string
-	Info     map[string]interface{}
-	InfoHash []byte
-	BlockCh  chan Block
+	Announce    string
+	BlockCh     chan Block
+	Blocks      int
+	Info        map[string]interface{}
+	InfoHash    []byte
+	Length      int
+	Name        string
+	Pieces      [][]byte
+	PieceLength int
 }
 
 type Block struct {
@@ -44,11 +54,47 @@ func ReadFromFile(file *os.File) (*Torrent, error) {
 		return nil, err
 	}
 
+	announce, ok := t["announce"].(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to read announce string")
+	}
+
+	length, ok := info["length"].(int)
+	if !ok {
+		return nil, fmt.Errorf("failed to read length")
+	}
+
+	name, ok := info["name"].(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to read name")
+	}
+
+	pieceLength, ok := info["piece length"].(int)
+	if !ok {
+		return nil, fmt.Errorf("failed to read piece length")
+	}
+	blocks := pieceLength / MaxBlockLen
+
+	piecesStr, ok := info["pieces"].(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to read pieces string")
+	}
+
+	pieces := [][]byte{}
+	for i := 0; i < len(piecesStr); i += PieceHashLen {
+		pieces = append(pieces, []byte(piecesStr[i:i+PieceHashLen]))
+	}
+
 	return &Torrent{
-		Announce: t["announce"].(string),
-		Info:     info,
-		InfoHash: infoHash,
-		BlockCh:  make(chan Block, 10), // why 10?
+		Announce:    announce,
+		BlockCh:     make(chan Block, 10), // why 10?
+		Blocks:      blocks,
+		Info:        info,
+		InfoHash:    infoHash,
+		Length:      length,
+		Name:        name,
+		PieceLength: pieceLength,
+		Pieces:      pieces,
 	}, nil
 }
 

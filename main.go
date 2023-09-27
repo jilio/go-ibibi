@@ -17,7 +17,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	trnt, err := torrent.ReadFromFile(file)
+	t, err := torrent.ReadFromFile(file)
 	if err != nil {
 		fmt.Println("failed to create torrent", err)
 		os.Exit(1)
@@ -28,20 +28,20 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		resultFile, err := os.Create("result.fb2")
+		resultFile, err := os.Create(t.Name)
 		if err != nil {
 			fmt.Println("failed to create result file", err)
 			os.Exit(1)
 		}
 
 		for {
-			block := <-trnt.BlockCh
+			block := <-t.BlockCh
 			fmt.Println("block received", block.Index, block.Begin, block.Length)
 			resultFile.Write(block.Data)
 		}
 	}()
 
-	peers, err := trnt.GetPeers()
+	peers, err := t.GetPeers()
 	if err != nil {
 		fmt.Println("failed to get peers", err)
 		os.Exit(1)
@@ -54,7 +54,7 @@ func main() {
 	}
 
 	peer := peers[3]
-	err = peer.Handshake(trnt.InfoHash)
+	err = peer.Handshake(t.InfoHash)
 	if err != nil {
 		fmt.Println("failed to handshake", err)
 		os.Exit(1)
@@ -74,28 +74,22 @@ func main() {
 	peer.SendMessage(torrent.Interested, nil)
 	fmt.Println("interested sent")
 
-	fmt.Println("torrent info", trnt.Info)
+	fmt.Println("torrent info", t.Info)
 
-	pieces := len(trnt.Info["pieces"].(string)) / 20
-	pieceLength := trnt.Info["piece length"].(int)
-	filesize := trnt.Info["length"].(int)
-	maxBlockLength := 16384
-	blocks := pieceLength / maxBlockLength
-
-	for piece := 0; piece < pieces; piece += 1 {
-		for block := 0; block < blocks; block += 1 {
-			blockOffset := block * maxBlockLength
-			left := filesize - (piece*pieceLength + block*maxBlockLength)
-			blockLength := min(maxBlockLength, left)
+	for piece := 0; piece < len(t.Pieces); piece += 1 {
+		for block := 0; block < t.Blocks; block += 1 {
+			blockOffset := block * torrent.MaxBlockLen
+			left := t.Length - (piece*t.PieceLength + block*torrent.MaxBlockLen)
+			blockLength := min(torrent.MaxBlockLen, left)
 
 			if blockLength <= 0 {
 				break
 			}
 
 			peer.RequestPiece(uint32(piece), uint32(blockOffset), uint32(blockLength))
-			fmt.Printf("progress: %.2f\n", float32(piece*pieceLength+blockOffset+blockLength)/float32(filesize))
+			fmt.Printf("progress: %.2f\n", float32(piece*t.PieceLength+blockOffset+blockLength)/float32(t.Length))
 
-			time.Sleep(100 * time.Millisecond) // todo: ограничить кол-во запросов в секунду
+			time.Sleep(150 * time.Millisecond) // todo: ограничить кол-во запросов в секунду
 		}
 	}
 
